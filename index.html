@@ -1,112 +1,212 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Video Library</title>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-body{
-    font-family: Arial, sans-serif;
-    background:#f5f7fb;
+
+*{
+    box-sizing:border-box;
     margin:0;
+    padding:0;
+}
+
+body{
+    font-family:Segoe UI,Arial,sans-serif;
+    background:#f5f7fb;
+    color:#333;
+}
+
+.header{
+    background:white;
     padding:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+    position:sticky;
+    top:0;
+    z-index:100;
 }
 
-.container{
-    max-width:1200px;
-    margin:auto;
-}
-
-h1{
-    margin-bottom:20px;
+.header h1{
+    margin-bottom:15px;
 }
 
 .toolbar{
     display:flex;
     gap:10px;
     flex-wrap:wrap;
-    margin-bottom:20px;
 }
 
 input,select{
-    padding:10px;
+    padding:12px;
     border:1px solid #ddd;
-    border-radius:8px;
+    border-radius:10px;
     font-size:14px;
 }
 
-input{
+#search{
     flex:1;
     min-width:250px;
 }
 
-.course{
-    background:white;
-    border-radius:12px;
-    margin-bottom:12px;
-    padding:12px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+.container{
+    max-width:1400px;
+    margin:auto;
+    padding:20px;
 }
 
-.course summary{
+.source-section{
+    margin-bottom:40px;
+}
+
+.source-title{
+    font-size:24px;
+    margin-bottom:15px;
+}
+
+.course-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    gap:16px;
+}
+
+.course-card{
+    background:white;
+    border-radius:14px;
+    padding:18px;
+    cursor:pointer;
+    transition:.2s;
+    box-shadow:0 2px 6px rgba(0,0,0,.08);
+}
+
+.course-card:hover{
+    transform:translateY(-2px);
+    box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+
+.course-name{
     font-size:18px;
-    font-weight:bold;
+    font-weight:600;
+    margin-bottom:10px;
+}
+
+.course-meta{
+    color:#666;
+    font-size:13px;
+}
+
+.modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.6);
+    z-index:999;
+}
+
+.modal-content{
+    background:white;
+    width:min(900px,95%);
+    max-height:90vh;
+    overflow:auto;
+    margin:30px auto;
+    border-radius:16px;
+    padding:25px;
+}
+
+.close-btn{
+    float:right;
+    border:none;
+    background:#efefef;
+    padding:10px 15px;
+    border-radius:8px;
     cursor:pointer;
 }
 
 .module{
-    margin-top:10px;
-    margin-left:15px;
+    margin-top:20px;
+}
+
+.module h3{
+    margin-bottom:10px;
 }
 
 .lesson{
     display:block;
-    padding:8px 12px;
-    margin:5px 0;
     text-decoration:none;
     color:#333;
-    border-radius:8px;
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:8px;
+    background:#f8f9fc;
 }
 
 .lesson:hover{
-    background:#eef4ff;
+    background:#eaf1ff;
+}
+
+.lesson-title{
+    font-weight:500;
+}
+
+.empty{
+    text-align:center;
+    padding:40px;
+    color:#777;
 }
 
 .badge{
     display:inline-block;
-    padding:3px 8px;
-    background:#e7f0ff;
-    border-radius:20px;
+    background:#eef3ff;
+    color:#4d6bff;
+    padding:4px 10px;
+    border-radius:999px;
     font-size:12px;
-    margin-left:8px;
+    margin-top:10px;
 }
+
 </style>
 </head>
-
 <body>
 
-<div class="container">
+<div class="header">
 
-<h1>🎬 Video Library</h1>
+    <h1>🎬 Video Library</h1>
 
-<div class="toolbar">
-    <input type="text" id="search" placeholder="Search lesson...">
+    <div class="toolbar">
 
-    <select id="sourceFilter">
-        <option value="">All Sources</option>
-    </select>
+        <input
+            id="search"
+            placeholder="Search course, module, lesson..."
+        >
 
-    <select id="courseFilter">
-        <option value="">All Courses</option>
-    </select>
+        <select id="sourceFilter">
+            <option value="">All Sources</option>
+        </select>
+
+    </div>
+
 </div>
 
-<div id="content"></div>
+<div class="container">
+    <div id="content"></div>
+</div>
 
+<div class="modal" id="courseModal">
+    <div class="modal-content">
+
+        <button class="close-btn" onclick="closeModal()">
+            Close
+        </button>
+
+        <h2 id="modalTitle"></h2>
+
+        <div id="modalBody"></div>
+
+    </div>
 </div>
 
 <script>
@@ -116,103 +216,240 @@ let allData=[];
 Papa.parse("videos.csv",{
     download:true,
     header:true,
-    complete:(results)=>{
-        allData=results.data.filter(x=>x.URL);
-        populateFilters();
-        render();
+    skipEmptyLines:true,
+    complete:function(result){
+
+        allData=result.data;
+
+        loadFilters();
+        renderCourses();
     }
 });
 
-function populateFilters(){
+function loadFilters(){
 
-    const sources=[...new Set(allData.map(x=>x.Sumber))];
-    const courses=[...new Set(allData.map(x=>x.NamaKursus))];
+    const sources=[
+        ...new Set(
+            allData.map(x=>x.Sumber)
+        )
+    ];
 
-    const source=document.getElementById("sourceFilter");
-    const course=document.getElementById("courseFilter");
+    const ddl=document.getElementById("sourceFilter");
 
-    sources.forEach(s=>{
-        source.innerHTML+=`<option>${s}</option>`;
-    });
+    sources.sort().forEach(s=>{
 
-    courses.forEach(c=>{
-        course.innerHTML+=`<option>${c}</option>`;
+        ddl.innerHTML += `
+        <option value="${s}">
+            ${s}
+        </option>
+        `;
     });
 }
 
-document.getElementById("search").addEventListener("input",render);
-document.getElementById("sourceFilter").addEventListener("change",render);
-document.getElementById("courseFilter").addEventListener("change",render);
+document
+.getElementById("search")
+.addEventListener("input",renderCourses);
 
-function render(){
+document
+.getElementById("sourceFilter")
+.addEventListener("change",renderCourses);
 
-    const keyword=document.getElementById("search").value.toLowerCase();
-    const source=document.getElementById("sourceFilter").value;
-    const course=document.getElementById("courseFilter").value;
+function renderCourses(){
+
+    const keyword=
+        document
+        .getElementById("search")
+        .value
+        .toLowerCase();
+
+    const sourceFilter=
+        document
+        .getElementById("sourceFilter")
+        .value;
 
     let filtered=allData.filter(v=>{
 
-        const matchKeyword=
-            (v.Lesson || "").toLowerCase().includes(keyword) ||
-            (v.Modul || "").toLowerCase().includes(keyword) ||
-            (v.NamaKursus || "").toLowerCase().includes(keyword);
+        const text=`
+            ${v.NamaKursus}
+            ${v.Modul}
+            ${v.Lesson}
+        `.toLowerCase();
 
-        const matchSource=!source || v.Sumber===source;
-        const matchCourse=!course || v.NamaKursus===course;
+        const keywordMatch=
+            text.includes(keyword);
 
-        return matchKeyword && matchSource && matchCourse;
+        const sourceMatch=
+            !sourceFilter ||
+            v.Sumber===sourceFilter;
+
+        return keywordMatch && sourceMatch;
     });
 
     const grouped={};
 
     filtered.forEach(item=>{
 
-        if(!grouped[item.NamaKursus])
-            grouped[item.NamaKursus]={};
+        if(!grouped[item.Sumber]){
+            grouped[item.Sumber]={};
+        }
 
-        if(!grouped[item.NamaKursus][item.Modul])
-            grouped[item.NamaKursus][item.Modul]=[];
+        if(!grouped[item.Sumber][item.NamaKursus]){
+            grouped[item.Sumber][item.NamaKursus]=[];
+        }
 
-        grouped[item.NamaKursus][item.Modul].push(item);
+        grouped[item.Sumber][item.NamaKursus].push(item);
     });
 
     let html="";
 
-    Object.keys(grouped).forEach(course=>{
+    Object.keys(grouped)
+    .sort()
+    .forEach(source=>{
 
-        html+=`
-        <details class="course">
-            <summary>${course}</summary>
+        html += `
+        <div class="source-section">
+
+            <div class="source-title">
+                📚 ${source}
+            </div>
+
+            <div class="course-grid">
         `;
 
-        Object.keys(grouped[course]).forEach(module=>{
+        Object.keys(grouped[source])
+        .sort()
+        .forEach(course=>{
 
-            html+=`
-            <div class="module">
-                <h4>${module}</h4>
+            const videos=
+                grouped[source][course];
+
+            const modules=
+                new Set(
+                    videos.map(v=>v.Modul)
+                ).size;
+
+            html += `
+            <div
+                class="course-card"
+                onclick="openCourse('${encodeURIComponent(course)}','${encodeURIComponent(source)}')"
+            >
+
+                <div class="course-name">
+                    ${course}
+                </div>
+
+                <div class="course-meta">
+                    ${videos.length} Lessons
+                </div>
+
+                <div class="badge">
+                    ${modules} Modules
+                </div>
+
+            </div>
             `;
-
-            grouped[course][module].forEach(video=>{
-
-                html+=`
-                <a
-                    class="lesson"
-                    href="${video.URL}"
-                    target="_blank">
-                    ▶ ${video.Lesson}
-                    <span class="badge">${video.Sumber}</span>
-                </a>
-                `;
-            });
-
-            html+=`</div>`;
         });
 
-        html+=`</details>`;
+        html += `
+            </div>
+        </div>
+        `;
     });
 
-    document.getElementById("content").innerHTML=html;
+    if(html===""){
+        html=`
+        <div class="empty">
+            No data found
+        </div>
+        `;
+    }
+
+    document
+    .getElementById("content")
+    .innerHTML=html;
 }
+
+function openCourse(course,source){
+
+    course=decodeURIComponent(course);
+    source=decodeURIComponent(source);
+
+    const videos=
+        allData.filter(v=>
+            v.NamaKursus===course &&
+            v.Sumber===source
+        );
+
+    const modules={};
+
+    videos.forEach(v=>{
+
+        if(!modules[v.Modul]){
+            modules[v.Modul]=[];
+        }
+
+        modules[v.Modul].push(v);
+    });
+
+    let html="";
+
+    Object.keys(modules)
+    .sort()
+    .forEach(module=>{
+
+        html += `
+        <div class="module">
+
+            <h3>${module}</h3>
+        `;
+
+        modules[module].forEach(video=>{
+
+            html += `
+            <a
+                class="lesson"
+                href="${video.URL}"
+                target="_blank"
+            >
+
+                <div class="lesson-title">
+                    ▶ ${video.Lesson}
+                </div>
+
+            </a>
+            `;
+        });
+
+        html += `
+        </div>
+        `;
+    });
+
+    document.getElementById("modalTitle").innerHTML=
+        course;
+
+    document.getElementById("modalBody").innerHTML=
+        html;
+
+    document.getElementById("courseModal").style.display=
+        "block";
+}
+
+function closeModal(){
+
+    document.getElementById("courseModal").style.display=
+        "none";
+}
+
+window.onclick=function(event){
+
+    const modal=
+        document.getElementById("courseModal");
+
+    if(event.target===modal){
+        closeModal();
+    }
+};
 
 </script>
 
