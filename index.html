@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Video Library</title>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+body{
+    font-family: Arial, sans-serif;
+    background:#f5f7fb;
+    margin:0;
+    padding:20px;
+}
+
+.container{
+    max-width:1200px;
+    margin:auto;
+}
+
+h1{
+    margin-bottom:20px;
+}
+
+.toolbar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:20px;
+}
+
+input,select{
+    padding:10px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:14px;
+}
+
+input{
+    flex:1;
+    min-width:250px;
+}
+
+.course{
+    background:white;
+    border-radius:12px;
+    margin-bottom:12px;
+    padding:12px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.course summary{
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.module{
+    margin-top:10px;
+    margin-left:15px;
+}
+
+.lesson{
+    display:block;
+    padding:8px 12px;
+    margin:5px 0;
+    text-decoration:none;
+    color:#333;
+    border-radius:8px;
+}
+
+.lesson:hover{
+    background:#eef4ff;
+}
+
+.badge{
+    display:inline-block;
+    padding:3px 8px;
+    background:#e7f0ff;
+    border-radius:20px;
+    font-size:12px;
+    margin-left:8px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🎬 Video Library</h1>
+
+<div class="toolbar">
+    <input type="text" id="search" placeholder="Search lesson...">
+
+    <select id="sourceFilter">
+        <option value="">All Sources</option>
+    </select>
+
+    <select id="courseFilter">
+        <option value="">All Courses</option>
+    </select>
+</div>
+
+<div id="content"></div>
+
+</div>
+
+<script>
+
+let allData=[];
+
+Papa.parse("videos.csv",{
+    download:true,
+    header:true,
+    complete:(results)=>{
+        allData=results.data.filter(x=>x.URL);
+        populateFilters();
+        render();
+    }
+});
+
+function populateFilters(){
+
+    const sources=[...new Set(allData.map(x=>x.Sumber))];
+    const courses=[...new Set(allData.map(x=>x.NamaKursus))];
+
+    const source=document.getElementById("sourceFilter");
+    const course=document.getElementById("courseFilter");
+
+    sources.forEach(s=>{
+        source.innerHTML+=`<option>${s}</option>`;
+    });
+
+    courses.forEach(c=>{
+        course.innerHTML+=`<option>${c}</option>`;
+    });
+}
+
+document.getElementById("search").addEventListener("input",render);
+document.getElementById("sourceFilter").addEventListener("change",render);
+document.getElementById("courseFilter").addEventListener("change",render);
+
+function render(){
+
+    const keyword=document.getElementById("search").value.toLowerCase();
+    const source=document.getElementById("sourceFilter").value;
+    const course=document.getElementById("courseFilter").value;
+
+    let filtered=allData.filter(v=>{
+
+        const matchKeyword=
+            (v.Lesson || "").toLowerCase().includes(keyword) ||
+            (v.Modul || "").toLowerCase().includes(keyword) ||
+            (v.NamaKursus || "").toLowerCase().includes(keyword);
+
+        const matchSource=!source || v.Sumber===source;
+        const matchCourse=!course || v.NamaKursus===course;
+
+        return matchKeyword && matchSource && matchCourse;
+    });
+
+    const grouped={};
+
+    filtered.forEach(item=>{
+
+        if(!grouped[item.NamaKursus])
+            grouped[item.NamaKursus]={};
+
+        if(!grouped[item.NamaKursus][item.Modul])
+            grouped[item.NamaKursus][item.Modul]=[];
+
+        grouped[item.NamaKursus][item.Modul].push(item);
+    });
+
+    let html="";
+
+    Object.keys(grouped).forEach(course=>{
+
+        html+=`
+        <details class="course">
+            <summary>${course}</summary>
+        `;
+
+        Object.keys(grouped[course]).forEach(module=>{
+
+            html+=`
+            <div class="module">
+                <h4>${module}</h4>
+            `;
+
+            grouped[course][module].forEach(video=>{
+
+                html+=`
+                <a
+                    class="lesson"
+                    href="${video.URL}"
+                    target="_blank">
+                    ▶ ${video.Lesson}
+                    <span class="badge">${video.Sumber}</span>
+                </a>
+                `;
+            });
+
+            html+=`</div>`;
+        });
+
+        html+=`</details>`;
+    });
+
+    document.getElementById("content").innerHTML=html;
+}
+
+</script>
+
+</body>
+</html>
